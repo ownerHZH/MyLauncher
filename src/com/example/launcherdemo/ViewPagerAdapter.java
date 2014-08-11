@@ -35,5 +35,39 @@ public class ViewPagerAdapter extends PagerAdapter
         View v=pages.get(position).getView();
         container.addView(v);            
         return v;  
-    }          	
+    } 
+    
+    private Page getPage(int pageIndex) {
+		return pages.get(pageIndex);
+	}
+
+	public void swapItems(int pageIndex, int itemIndexA, int itemIndexB) {
+		getPage(pageIndex).swapItems(itemIndexA, itemIndexB);
+	}
+
+	public void moveItemToPreviousPage(int pageIndex, int itemIndex) {
+		int leftPageIndex = pageIndex-1;
+		if (leftPageIndex >= 0) {
+			Page startpage = getPage(pageIndex);
+			Page landingPage = getPage(leftPageIndex);
+			
+			RResolveInfo item = startpage.removeItem(itemIndex);
+			landingPage.addItem(item);	
+		}	
+	}
+
+	public void moveItemToNextPage(int pageIndex, int itemIndex) {
+		int rightPageIndex = pageIndex+1;
+		if (rightPageIndex < getCount()) {
+			Page startpage = getPage(pageIndex);
+			Page landingPage = getPage(rightPageIndex);
+			
+			RResolveInfo item = startpage.removeItem(itemIndex);
+			landingPage.addItem(item);			
+		}	
+	}
+
+	public void deleteItem(int pageIndex, int itemIndex) {
+		getPage(pageIndex).deleteItem(itemIndex);
+	}
 }
