@@ -2,17 +2,15 @@ package com.example.launcherdemo;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 
-import android.R.integer;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.Looper;
 import android.os.Message;
 import android.animation.Animator;
-import android.animation.Animator.AnimatorListener;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
@@ -20,7 +18,6 @@ import android.animation.ValueAnimator;
 import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
 import android.app.Activity;
-import android.app.LauncherActivity;
 import android.appwidget.AppWidgetHost;
 import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProviderInfo;
@@ -36,8 +33,8 @@ import android.support.v4.view.PagerAdapter;
 import android.support.v4.view.ViewPager;
 import android.support.v4.view.ViewPager.OnPageChangeListener;
 import android.util.Log;
-import android.view.DragEvent;
 import android.view.Gravity;
+import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MotionEvent;
 import android.view.View;
@@ -45,14 +42,11 @@ import android.view.View.OnClickListener;
 import android.view.View.OnLongClickListener;
 import android.view.ViewGroup;
 import android.view.ViewGroup.LayoutParams;
+import android.view.animation.AccelerateDecelerateInterpolator;
 import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
-import android.view.animation.BounceInterpolator;
-import android.view.animation.CycleInterpolator;
-import android.view.animation.DecelerateInterpolator;
 import android.view.animation.LinearInterpolator;
-import android.view.animation.ScaleAnimation;
-import android.view.animation.Animation.AnimationListener;
+import android.view.animation.RotateAnimation;
 import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemClickListener;
 import android.widget.AdapterView.OnItemLongClickListener;
@@ -65,19 +59,19 @@ import android.widget.RelativeLayout;
 import android.widget.SlidingDrawer;
 import android.widget.SlidingDrawer.OnDrawerCloseListener;
 import android.widget.SlidingDrawer.OnDrawerOpenListener;
-import android.widget.SlidingDrawer.OnDrawerScrollListener;
 import android.widget.TextView;
-import android.widget.Toast;
 
+@SuppressWarnings("deprecation")
 @TargetApi(Build.VERSION_CODES.HONEYCOMB)
 @SuppressLint("NewApi")
 public class MyLauncher extends Activity {
 	//private GridView mGrid;
 	private RelativeLayout mainLiner;
-	private List<RResolveInfo> mApps=Collections.synchronizedList(new ArrayList<RResolveInfo>());
+	
+	private List<Page> pages=Collections.synchronizedList(new ArrayList<Page>());
 	//private List<List<RResolveInfo>> everyPageDataList=Collections.synchronizedList(new ArrayList<List<RResolveInfo>>());
 	//private List<AppsAdapter> everyPageDataAdapter=Collections.synchronizedList(new ArrayList<MyLauncher.AppsAdapter>());
-	List<View> views=Collections.synchronizedList(new ArrayList<View>());
+	//List<View> views=Collections.synchronizedList(new ArrayList<View>());
 	@SuppressWarnings("deprecation")
 	private SlidingDrawer slidingDrawer;
 	private Button handle;
@@ -88,22 +82,22 @@ public class MyLauncher extends Activity {
 	private Context context;
 	private ViewPager viewPager;
 	private ViewPagerAdapter viewPagerAdapter=null;
-	private AppsAdapter gridViewAdapter;
+	//private AppsAdapter gridViewAdapter;
 	private MyInstalledReceiver installedReceiver=null;
-	int intPageNumber=0;
-    int lastPageNumber=0;
-    int currentPage=0;
+    int currentPage=0; //在哪一页
+    int pagePosition=0;//点击的是哪一页的第几个
+    private boolean isShake=true;
     private final int  NOTIFY_DATASET_CHANGED=0x112;
-    private boolean isShake=false;
 	
     @SuppressWarnings("deprecation")
 	@Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        loadApps();
-        context = getApplicationContext();     
-        mAppWidgetManager = AppWidgetManager.getInstance(context); 
+        context = getApplicationContext();
         setContentView(R.layout.activity_my_launcher);
+        loadApps();            
+        mAppWidgetManager = AppWidgetManager.getInstance(context); 
+        
         
         slidingDrawer=(SlidingDrawer) findViewById(R.id.slidingdrawer1);
         handle=(Button) findViewById(R.id.handle);
@@ -111,7 +105,8 @@ public class MyLauncher extends Activity {
         //mGrid = (GridView) findViewById(R.id.apps_list); 
         mainLiner=(RelativeLayout) findViewById(R.id.mainLinear);
         //mGrid.setAdapter(new AppsAdapter()); 
-        
+        viewPagerAdapter=new ViewPagerAdapter(pages);
+        viewPager.setAdapter(viewPagerAdapter);
         
         //mGrid.setOnItemClickListener(listener);
        slidingDrawer.setOnDrawerCloseListener(new OnDrawerCloseListener() {
@@ -126,7 +121,7 @@ public class MyLauncher extends Activity {
 			
 			@Override
 			public void onDrawerOpened() {
-				reboundAnimation(slidingDrawer);//来回震荡
+				OwnAnimationUtils.reboundAnimation(slidingDrawer);//来回震荡
 				handle.setHeight(0);
 				handle.setBackgroundColor(Color.TRANSPARENT);
 				
@@ -134,7 +129,7 @@ public class MyLauncher extends Activity {
 		});  
         //mainLiner.setOnLongClickListener(longClickListener);
         
-        reLoadApp();//加载app
+        //reLoadApp();//加载app
         
         
         viewPager.setOnPageChangeListener(new OnPageChangeListener() {
@@ -142,6 +137,7 @@ public class MyLauncher extends Activity {
 			@Override
 			public void onPageSelected(int arg0) {
 				currentPage=arg0;
+				//clearGridViewItemAnimaion();
 			}
 			
 			@Override
@@ -158,9 +154,26 @@ public class MyLauncher extends Activity {
 		});
         
     }
+    
+    //清除item的动画效果
+    private void clearGridViewItemAnimaion() {
+		for(Page page:pages)
+		{
+			for(RResolveInfo rr:page.getItems())
+			{
+				rr.setLongclicked(false);
+			}
+			GridView gv=((GridView)(page.getView()));
+			int c=gv.getChildCount();
+			for(int i=0;i<c;i++)
+			{
+				gv.getChildAt(i).clearAnimation();
+			}
+		}		
+	}
 
     //加载app函数
-	private void reLoadApp() {
+	/*private void reLoadApp() {
 		intPageNumber=mApps.size()/16;
         lastPageNumber=mApps.size()%16;
         gridViewAdapter=null;
@@ -199,7 +212,7 @@ public class MyLauncher extends Activity {
         	viewPager.setCurrentItem(--currentPage);
         }
         
-	}     
+	}*/     
 
     //主界面背景长点击事件
 	private OnLongClickListener longClickListener=new OnLongClickListener() {
@@ -217,7 +230,7 @@ public class MyLauncher extends Activity {
 	@SuppressWarnings("deprecation")
 	@Override
 	public void onBackPressed() {
-		isShake=false;//停止抖动
+		isShake=false;
 		if(slidingDrawer.isOpened())
 		{
 			slidingDrawer.animateClose();
@@ -226,15 +239,7 @@ public class MyLauncher extends Activity {
 		new Thread(){			
 			@Override
 			public void run() {
-				for(RResolveInfo rr:mApps)
-				{
-					if(rr.getLongclicked())
-					{
-						rr.setLongclicked(false);
-					}
-				}
-				handler.sendEmptyMessage(NOTIFY_DATASET_CHANGED);
-				
+				handler.sendEmptyMessage(NOTIFY_DATASET_CHANGED);			
 			}}.start();
 		
 		//super.onBackPressed();
@@ -246,7 +251,9 @@ public class MyLauncher extends Activity {
 		public void handleMessage(Message msg) {
 			switch (msg.what) {
 			case NOTIFY_DATASET_CHANGED:
-				gridViewAdapter.notifyDataSetChanged();
+				clearGridViewItemAnimaion();
+				pages.get(currentPage).getAdapter().notifyDataSetChanged();
+				viewPagerAdapter.notifyDataSetChanged();
 				break;
 
 			default:
@@ -346,11 +353,14 @@ public class MyLauncher extends Activity {
     } 
     
     //获取所有已经安装的app信息
-    private void loadApps() {  
+    private void loadApps() {
+    	System.gc();
+    	List<RResolveInfo> mApps=new ArrayList<RResolveInfo>();
     	mApps.clear();
         Intent mainIntent = new Intent(Intent.ACTION_MAIN, null);           
         mainIntent.addCategory(Intent.CATEGORY_LAUNCHER);              
-        List<ResolveInfo>  apps = getPackageManager().queryIntentActivities(mainIntent, 0);  
+        List<ResolveInfo>  apps = getPackageManager().queryIntentActivities(mainIntent, 0);
+        
         for(ResolveInfo r:apps)
         {
         	RResolveInfo arg0=new RResolveInfo();
@@ -358,7 +368,126 @@ public class MyLauncher extends Activity {
         	arg0.setLongclicked(false);
         	mApps.add(arg0);
         }
-    } 
+        
+        if(mApps!=null&&mApps.size()>0)
+        {
+        	pages.clear();        	        	       	
+        	for(int i=0;i<=mApps.size()/16;i++)
+        	{
+        		Page page=new Page();
+        		
+        		GridView gridview=new GridView(context);
+            	gridview.setLayoutParams(new LayoutParams(LayoutParams.FILL_PARENT, LayoutParams.FILL_PARENT));
+            	gridview.setNumColumns(4);
+            	gridview.setGravity(Gravity.CENTER); 	
+            	gridview.setHorizontalFadingEdgeEnabled(false);
+            	gridview.setStretchMode(GridView.STRETCH_COLUMN_WIDTH);
+            	gridview.setVerticalSpacing(20);
+            	       						
+				if(i==apps.size()/16)
+        		{
+        			List<RResolveInfo> lastList=mApps.subList(i*16, mApps.size());
+        			if(lastList!=null&&lastList.size()>0)
+        			{
+        				page.setItems(lastList);
+        				AppsAdapter adp=new AppsAdapter(context, lastList);       				
+						gridview.setOnItemClickListener(gridviewitemclicklistener);      				
+						gridview.setOnItemLongClickListener(gridviewitemlongclicklistener);
+        				gridview.setAdapter(adp);
+        				page.setAdapter(adp);
+        				page.setView(gridview);
+        				
+    					pages.add(page);
+        			}
+        			
+        		}else
+        		{
+        			List<RResolveInfo> lastList=mApps.subList(i*16, i*16+16);
+        			page.setItems(mApps.subList(i*16, i*16+16));
+        			AppsAdapter adp=new AppsAdapter(context,lastList);
+        			gridview.setOnItemClickListener(gridviewitemclicklistener);
+    				gridview.setOnItemLongClickListener(gridviewitemlongclicklistener);
+        			gridview.setAdapter(adp);
+    				page.setAdapter(adp);
+    				page.setView(gridview);
+
+					pages.add(page);
+        		}
+        	}
+        }
+    }
+    
+    private OnItemClickListener gridviewitemclicklistener=new OnItemClickListener() {
+
+		@Override
+		public void onItemClick(AdapterView<?> parent, View v, int position,
+				long id) {
+			pagePosition=position;
+			Page p=pages.get(currentPage);
+			RResolveInfo info=p.getItems().get(position);
+			//该应用的包名  
+             String pkg = info.getResolveInfo().activityInfo.packageName;  
+             //应用的主activity类  
+             String cls = info.getResolveInfo().activityInfo.name;  
+               
+             ComponentName componet = new ComponentName(pkg, cls);  
+               
+             Intent i = new Intent();  
+             i.setComponent(componet);  
+             startActivity(i);
+			
+		}
+	};
+    private OnItemLongClickListener gridviewitemlongclicklistener=new OnItemLongClickListener() {
+
+		@Override
+		public boolean onItemLongClick(AdapterView<?> parent, View v, final int position,
+				long id) {
+			pagePosition=position;
+			Page p=pages.get(currentPage);
+			final RResolveInfo info=p.getItems().get(position);
+			info.setLongclicked(true);
+			//shakeAnimation(v,2.0f,13);//长按，抖动 
+			v.startAnimation(rotateAnimation());
+			View dv=v.findViewById(R.id.imageViewDelete);
+			dv.setVisibility(View.VISIBLE);
+			dv.setOnClickListener(new OnClickListener() {
+				
+				@Override
+				public void onClick(View v) {
+					isShake=false;
+					pagePosition=position;
+					//该应用的包名  
+ 	                String pkg = info.getResolveInfo().activityInfo.packageName; 
+					//通过程序的包名创建URI 
+					Uri packageURI = Uri.parse("package:"+pkg); 
+					//创建Intent意图 
+					Intent intent = new Intent(Intent.ACTION_DELETE,packageURI); 
+					//执行卸载程序 
+					startActivity(intent);
+				}
+			});
+			return true;
+		}
+	};
+	
+	//长按抖动效果
+	private Animation rotateAnimation() {
+        Animation rotate = new RotateAnimation(-2.0f,
+                                          2.0f,
+                                          Animation.RELATIVE_TO_SELF,
+                                          0.5f,
+                                          Animation.RELATIVE_TO_SELF,
+                                          0.5f);
+
+         rotate.setRepeatMode(Animation.REVERSE);
+        rotate.setRepeatCount(Animation.INFINITE);
+        rotate.setDuration(60);
+        rotate.setInterpolator(new AccelerateDecelerateInterpolator());
+
+        return rotate;
+    }
+    
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -367,186 +496,76 @@ public class MyLauncher extends Activity {
         return true;
     }
     
-    //ViewPager Adapter
-    public class ViewPagerAdapter extends PagerAdapter
-    {
-    	 private List<View> mListViews;  
-         
-         public ViewPagerAdapter(List<View> mListViews) {  
-             this.mListViews = mListViews;  
-         } 
-		@Override
-		public int getCount() {
-			 return  mListViews.size(); 
-		}
-
-		@Override
-		public boolean isViewFromObject(View arg0, Object arg1) {
-			return arg0==arg1;
-		}
-		
-		@Override  
-        public void destroyItem(ViewGroup container, int position, Object object)   {     
-            container.removeView(mListViews.get(position));  
-        }  
-  
-  
-        @Override  
-        public Object instantiateItem(ViewGroup container, int position) {            
-             container.addView(mListViews.get(position), 0);  
-             return mListViews.get(position);  
-        }          	
-    }
+   
     
-    //GridView Adapter
-    public class AppsAdapter extends BaseAdapter   
-    {   
-    	private List<RResolveInfo> apps;       
-        public List<RResolveInfo> getApps() {
-			return apps;
-		}
-		public void setApps(List<RResolveInfo> mApps) {
-			this.apps = mApps;
-		}
-		
-		public AppsAdapter(List<RResolveInfo> mApps) {
-        	this.apps=mApps;
-        } 
-        @Override   
-        public View getView(int position, View convertView, ViewGroup parent) {               
-        	final ViewHolder holder;                                
-            final RResolveInfo info=apps.get(position);
-            if(info!=null)
-            {
-            	if (convertView == null) { 
-                	convertView = getLayoutInflater().inflate(R.layout.gridlayout_item, null);
-                	holder = new ViewHolder();
-                    holder.tv = (TextView)convertView.findViewById(R.id.tv);
-                    holder.iv = (ImageView)convertView.findViewById(R.id.iv);
-                    holder.deletev=(ImageView)convertView.findViewById(R.id.imageViewDelete);
-                    holder.picAndText=(LinearLayout) convertView.findViewById(R.id.picAndText);
-                    convertView.setTag(holder);                
-                } else {                   
-                	holder = (ViewHolder) convertView.getTag();               
-                }
-            	holder.tv.setText(info.getResolveInfo().loadLabel(getPackageManager()));
-                holder.iv.setImageDrawable(info.getResolveInfo().activityInfo.loadIcon(getPackageManager()));
-                if(info.getLongclicked())
-                {
-                	holder.deletev.setVisibility(View.VISIBLE);
-                }else
-                {
-                	holder.deletev.setVisibility(View.GONE);
-                }
-                //图标长点击事件
-                holder.picAndText.setOnLongClickListener(new OnLongClickListener() {
-    				
-    				@Override
-    				public boolean onLongClick(View arg0) {
-    					isShake=true;
-    					shakeAnimation(arg0,2.0f,12);       //长按，抖动
-    					info.setLongclicked(true);
-    					holder.deletev.setVisibility(View.VISIBLE);
-    					return false;
-    				}
-    			});
-                //图标点击事件
-                holder.picAndText.setOnClickListener(new OnClickListener() {
-    				
-    				@Override
-    				public void onClick(View arg0) {
-                      if(!info.getLongclicked())
-                      {
-                    	//该应用的包名  
-     	                String pkg = info.getResolveInfo().activityInfo.packageName;  
-     	                //应用的主activity类  
-     	                String cls = info.getResolveInfo().activityInfo.name;  
-     	                  
-     	                ComponentName componet = new ComponentName(pkg, cls);  
-     	                  
-     	                Intent i = new Intent();  
-     	                i.setComponent(componet);  
-     	                startActivity(i); 
-                      }	                 
-    				}
-    			});
-                //卸载按钮点击事件
-                holder.deletev.setOnClickListener(new OnClickListener() {
-    				
-    				@Override
-    				public void onClick(View arg0) {
-    					//该应用的包名  
-     	                String pkg = info.getResolveInfo().activityInfo.packageName; 
-    					//通过程序的包名创建URI 
-    					Uri packageURI = Uri.parse("package:"+pkg); 
-    					//创建Intent意图 
-    					Intent intent = new Intent(Intent.ACTION_DELETE,packageURI); 
-    					//执行卸载程序 
-    					startActivity(intent);
-    				}
-    			});
-            }
-            
-            return convertView;           
-        }                   
-        public  int getCount() {              
-            return apps.size();           
-        }               
-        public  Object getItem(int position) {               
-            return apps.get(position);           
-        }               
-        public  long getItemId(int position) {               
-            return position;           
-        }
-        
-        class ViewHolder{
-            private TextView tv;
-            private ImageView iv;
-            private ImageView deletev;
-            private LinearLayout picAndText;
-        }
-		   
-    }
+    
 
     @SuppressLint("NewApi")
-    //回弹效果函数
-	private void reboundAnimation(final View v) { 
-    	if (Build.VERSION.SDK_INT < Build.VERSION_CODES.HONEYCOMB) {
-    	     //TODO:如果当前版本小于HONEYCOMB版本，即3.0版本
-    		com.nineoldandroids.animation.ObjectAnimator bounceAnim1 = com.nineoldandroids.animation.ObjectAnimator.ofFloat(v, "y",
-                    0f, 500f);
-            bounceAnim1.setDuration(1000);
-            //bounceAnim1.setRepeatCount(1);
-            bounceAnim1.setInterpolator(new DecelerateInterpolator());
-        	
-        	com.nineoldandroids.animation.ObjectAnimator bounceAnim = com.nineoldandroids.animation.ObjectAnimator.ofFloat(v, "y",
-                    500.0f, 0f).setDuration(3000);
-            bounceAnim.setInterpolator(new BounceInterpolator());
-            
-            com.nineoldandroids.animation.AnimatorSet bouncer = new com.nineoldandroids.animation.AnimatorSet();
-            bouncer.play(bounceAnim1).before(bounceAnim);
-            
-            bouncer.start();
-    	}else {
-    		ValueAnimator bounceAnim1 = ObjectAnimator.ofFloat(v, "y",
-                    0f, 500f);
-            bounceAnim1.setDuration(1000);
-            //bounceAnim1.setRepeatCount(1);
-            bounceAnim1.setInterpolator(new DecelerateInterpolator());
-        	
-        	ValueAnimator bounceAnim = ObjectAnimator.ofFloat(v, "y",
-                    500.0f, 0f).setDuration(3000);
-            bounceAnim.setInterpolator(new BounceInterpolator());
-            
-            AnimatorSet bouncer = new AnimatorSet();
-            bouncer.play(bounceAnim1).before(bounceAnim);
-            
-            bouncer.start();
-		}
-		   	
+    
+    
+    
+    //应用的安装卸载监听广播
+    public class MyInstalledReceiver extends BroadcastReceiver {  
+        @Override  
+        public void onReceive(Context context, Intent intent) {  
+      
+            if (intent.getAction().equals("android.intent.action.PACKAGE_ADDED")) {     // install  
+                String packageName = intent.getDataString(); 
+                loadApps();
+            }  
+      
+            if (intent.getAction().equals("android.intent.action.PACKAGE_REMOVED")) {   // uninstall  
+                String packageName = intent.getDataString(); 
+                List<RResolveInfo> deLi=new ArrayList<RResolveInfo>();
+                for(RResolveInfo rr:pages.get(currentPage).getItems())
+				{
+					if(packageName.equalsIgnoreCase("package:"+rr.getResolveInfo().activityInfo.packageName))
+					{					
+						deLi.add(rr);						
+						break;
+					}
+				}
+                pages.get(currentPage).removeItem(deLi.get(0));
+                pages.get(currentPage).notifyDataSetChanged();
+                
+				//viewPagerAdapter.notifyDataSetChanged();
+                //reLoadApp();
+                //viewPagerAdapter.notifyDataSetChanged();
+                Log.e("launcher===", "卸载了 :" + packageName);  
+            }  
+        }  
     }
     
-    private void shakeAnimation(final View v,float scale,int time) { 
+    @Override  
+    public void onStart(){  
+        super.onStart();  
+        if(installedReceiver==null)
+        {
+        	installedReceiver = new MyInstalledReceiver();  
+            IntentFilter filter = new IntentFilter();  
+              
+            filter.addAction("android.intent.action.PACKAGE_ADDED");  
+            filter.addAction("android.intent.action.PACKAGE_REMOVED");  
+            filter.addDataScheme("package");  
+              
+            this.registerReceiver(installedReceiver, filter);
+        }     
+    }  
+    
+    
+      
+    @Override  
+    public void onDestroy(){  
+        if(installedReceiver != null) {  
+            this.unregisterReceiver(installedReceiver);  
+        }  
+          
+        super.onDestroy();  
+    } 
+    
+ 
+    
+    public void shakeAnimation(final View v,float scale,int time) { 
     	if (Build.VERSION.SDK_INT < Build.VERSION_CODES.HONEYCOMB) {
     	     //TODO:如果当前版本小于HONEYCOMB版本，即3.0版本
     		com.nineoldandroids.animation.ObjectAnimator bounceAnim1 = com.nineoldandroids.animation.ObjectAnimator
@@ -586,7 +605,9 @@ public class MyLauncher extends Activity {
 					{
 						bouncer.start();
 					}else {
+						bouncer.removeAllListeners();
 						bouncer.cancel();
+						bouncer.end();
 					}
 				}
             	
@@ -624,85 +645,14 @@ public class MyLauncher extends Activity {
 					{
 						bouncer.start();
 					}else {
+						bouncer.removeAllListeners();
 						bouncer.cancel();
+						bouncer.end();
 					}
 				}
 			});
 		}
 		   	
     }
-    //应用的安装卸载监听广播
-    public class MyInstalledReceiver extends BroadcastReceiver {  
-        @Override  
-        public void onReceive(Context context, Intent intent) {  
-      
-            if (intent.getAction().equals("android.intent.action.PACKAGE_ADDED")) {     // install  
-                //String packageName = intent.getDataString(); 
-                //Log.e("launcher===", "安装了 :" + packageName);
-               /* Intent ii = new Intent(packageName.replace("package:", ""));  
-                PackageManager pm = getPackageManager();  
-                List<ResolveInfo> apps = pm.queryIntentActivities(ii, PackageManager.MATCH_DEFAULT_ONLY);
-                if(apps!=null&&apps.size()>0)
-                {
-                	RResolveInfo arg0=new RResolveInfo();
-                    arg0.setLongclicked(false);
-                    ResolveInfo resolveInfo=apps.get(0);
-                    if(resolveInfo!=null)
-                    {
-                    	arg0.setResolveInfo(resolveInfo);
-        				mApps.add(arg0);
-                        reLoadApp();
-                    }
-    					
-                }*/
-                loadApps();
-                reLoadApp();
-            }  
-      
-            if (intent.getAction().equals("android.intent.action.PACKAGE_REMOVED")) {   // uninstall  
-                String packageName = intent.getDataString();  
-                for(RResolveInfo rr:mApps)
-				{
-					if(packageName.equalsIgnoreCase("package:"+rr.getResolveInfo().activityInfo.packageName))
-					{
-						mApps.remove(rr);
-						//gridViewAdapter.getApps().remove(rr);
-						//gridViewAdapter.notifyDataSetChanged();
-						break;
-					}
-				}
-                reLoadApp();
-                //viewPagerAdapter.notifyDataSetChanged();
-                Log.e("launcher===", "卸载了 :" + packageName);  
-            }  
-        }  
-    }
-    
-    @Override  
-    public void onStart(){  
-        super.onStart();  
-        if(installedReceiver==null)
-        {
-        	installedReceiver = new MyInstalledReceiver();  
-            IntentFilter filter = new IntentFilter();  
-              
-            filter.addAction("android.intent.action.PACKAGE_ADDED");  
-            filter.addAction("android.intent.action.PACKAGE_REMOVED");  
-            filter.addDataScheme("package");  
-              
-            this.registerReceiver(installedReceiver, filter);
-        }     
-    }  
-    
-    
-      
-    @Override  
-    public void onDestroy(){  
-        if(installedReceiver != null) {  
-            this.unregisterReceiver(installedReceiver);  
-        }  
-          
-        super.onDestroy();  
-    } 
     
 }

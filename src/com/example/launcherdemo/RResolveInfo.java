@@ -5,7 +5,8 @@ import android.content.pm.ResolveInfo;
 public class RResolveInfo{
 	private boolean longclicked;
 	private boolean clicked;
-    private ResolveInfo resolveInfo;
+
+	private ResolveInfo resolveInfo;
 	public boolean getLongclicked() {
 		return longclicked;
 	}
