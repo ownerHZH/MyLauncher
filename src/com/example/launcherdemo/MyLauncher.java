@@ -40,6 +40,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.view.View.OnLongClickListener;
+import android.view.View.OnTouchListener;
 import android.view.ViewGroup;
 import android.view.ViewGroup.LayoutParams;
 import android.view.animation.AccelerateDecelerateInterpolator;
@@ -68,7 +69,7 @@ public class MyLauncher extends Activity {
 	//private GridView mGrid;
 	private RelativeLayout mainLiner;
 	
-	private List<Page> pages=Collections.synchronizedList(new ArrayList<Page>());
+	public static List<Page> pages=Collections.synchronizedList(new ArrayList<Page>());
 	//private List<List<RResolveInfo>> everyPageDataList=Collections.synchronizedList(new ArrayList<List<RResolveInfo>>());
 	//private List<AppsAdapter> everyPageDataAdapter=Collections.synchronizedList(new ArrayList<MyLauncher.AppsAdapter>());
 	//List<View> views=Collections.synchronizedList(new ArrayList<View>());
@@ -78,7 +79,6 @@ public class MyLauncher extends Activity {
 	static final String TAG="TAG";
 	protected static final int CUT_HANDLE_HEIGHT = 0x112;
 	AppWidgetHost mAppWidgetHost ;
-	private AppWidgetManager mAppWidgetManager; 
 	private Context context;
 	private ViewPager viewPager;
 	private ViewPagerAdapter viewPagerAdapter=null;
@@ -86,26 +86,28 @@ public class MyLauncher extends Activity {
 	private MyInstalledReceiver installedReceiver=null;
     int currentPage=0; //在哪一页
     int pagePosition=0;//点击的是哪一页的第几个
-    private boolean isShake=true;
-    private final int  NOTIFY_DATASET_CHANGED=0x112;
+    private StopItemAnimator stopItemAnimatorCallBack;
 	
-    @SuppressWarnings("deprecation")
+    public void setStopItemAnimatorCallBack(
+			StopItemAnimator stopItemAnimatorCallBack) {
+		this.stopItemAnimatorCallBack = stopItemAnimatorCallBack;
+	}
+
+	@SuppressWarnings("deprecation")
 	@Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        context = getApplicationContext();
+        context = MyLauncher.this;
         setContentView(R.layout.activity_my_launcher);
         loadApps();            
-        mAppWidgetManager = AppWidgetManager.getInstance(context); 
-        
-        
+              
         slidingDrawer=(SlidingDrawer) findViewById(R.id.slidingdrawer1);
         handle=(Button) findViewById(R.id.handle);
         viewPager=(ViewPager) findViewById(R.id.vPager);
         //mGrid = (GridView) findViewById(R.id.apps_list); 
         mainLiner=(RelativeLayout) findViewById(R.id.mainLinear);
         //mGrid.setAdapter(new AppsAdapter()); 
-        viewPagerAdapter=new ViewPagerAdapter(pages);
+        viewPagerAdapter=new ViewPagerAdapter(context);
         viewPager.setAdapter(viewPagerAdapter);
         
         //mGrid.setOnItemClickListener(listener);
@@ -152,11 +154,11 @@ public class MyLauncher extends Activity {
 				
 			}
 		});
-        
+              
     }
     
     //清除item的动画效果
-    private void clearGridViewItemAnimaion() {
+    /*private void clearGridViewItemAnimaion() {
 		for(Page page:pages)
 		{
 			for(RResolveInfo rr:page.getItems())
@@ -170,7 +172,7 @@ public class MyLauncher extends Activity {
 				gv.getChildAt(i).clearAnimation();
 			}
 		}		
-	}
+	}*/
 
     //加载app函数
 	/*private void reLoadApp() {
@@ -214,145 +216,18 @@ public class MyLauncher extends Activity {
         
 	}*/     
 
-    //主界面背景长点击事件
-	private OnLongClickListener longClickListener=new OnLongClickListener() {
-		
-		@Override
-		public boolean onLongClick(View arg0) {
-			Log.e(TAG, "长按-------");
-			addWidget();
-			return true;
-		}
-	};
 	
 	
 	//后退按钮事件
 	@SuppressWarnings("deprecation")
 	@Override
 	public void onBackPressed() {
-		isShake=false;
-		if(slidingDrawer.isOpened())
-		{
-			slidingDrawer.animateClose();
-		}
-		//取消掉长点击
-		new Thread(){			
-			@Override
-			public void run() {
-				handler.sendEmptyMessage(NOTIFY_DATASET_CHANGED);			
-			}}.start();
-		
-		//super.onBackPressed();
-	}
-	
-	private Handler handler=new Handler(){
-
-		@Override
-		public void handleMessage(Message msg) {
-			switch (msg.what) {
-			case NOTIFY_DATASET_CHANGED:
-				clearGridViewItemAnimaion();
-				pages.get(currentPage).getAdapter().notifyDataSetChanged();
-				viewPagerAdapter.notifyDataSetChanged();
-				break;
-
-			default:
-				break;
-			}
-			super.handleMessage(msg);
-		}
-		
-	};
-
-	@Override
-	public boolean onTouchEvent(MotionEvent event) {
-		// TODO Auto-generated method stub
-		return super.onTouchEvent(event);
+		//停止抖动效果
+		//stopItemAnimatorCallBack.onStopAnimator();
+		viewPagerAdapter.notifyDataSetChanged();
 	}
 
-	//打开widget
-	void addWidget() {           
-		//mAppWidgetManager = AppWidgetManager.getInstance(context);  
-		mAppWidgetHost = new AppWidgetHost(MyLauncher.this, 0x100);
-		int appWidgetId = mAppWidgetHost.allocateAppWidgetId(); 
-		//int appWidgetId=AppWidgetManager.INVALID_APPWIDGET_ID;
-	    Intent pickIntent = new Intent(AppWidgetManager.ACTION_APPWIDGET_PICK);           
-	    pickIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);           
-	    // start the pick activity           
-	    startActivityForResult(pickIntent,0);       
-	} 
-    
-    @Override
-	protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-		// TODO Auto-generated method stub
-		super.onActivityResult(requestCode, resultCode, data);
-		  if (resultCode == RESULT_OK) {  
-	            switch (requestCode) {  
-	            case 0:  
-	                addAppWidget(data);  
-	                break;  
-	            case 1:  
-	                completeAddAppWidget(data);  
-	                break;  
-	            }  
-	        } else if (requestCode == 0  
-	                && resultCode == RESULT_CANCELED && data != null) {  
-	            int appWidgetId = data.getIntExtra(  
-	                    AppWidgetManager.EXTRA_APPWIDGET_ID, -1);  
-	            if (appWidgetId != -1) {  
-	                mAppWidgetHost.deleteAppWidgetId(appWidgetId);  
-	            }  
-	        }
-	}
-    
-    private void addAppWidget(Intent data) {  
-        int appWidgetId = data.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,-1);  
-        String customWidget = data.getStringExtra("custom_widget");  
-        if ("search_widget".equals(customWidget)) {  
-            mAppWidgetHost.deleteAppWidgetId(appWidgetId);  
-        } else {  
-            AppWidgetProviderInfo appWidget = mAppWidgetManager  
-                    .getAppWidgetInfo(appWidgetId);  
-  
-            Log.d("addAppWidget", "configure:" + appWidget.configure);  
-            if (appWidget.configure != null) {  
-                // 弹出配置界面   
-                Intent intent = new Intent(  
-                        AppWidgetManager.ACTION_APPWIDGET_CONFIGURE);  
-                intent.setComponent(appWidget.configure);  
-                intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,  
-                        appWidgetId);  
-  
-                startActivityForResult(intent, 1);  
-            } else {  
-                // 直接添加到界面   
-                onActivityResult(1, Activity.RESULT_OK,  
-                        data);  
-            }  
-        }  
-    }
-    
-    /** 
-     * 添加widget 
-     *  
-     * @param data 
-     */  
-    private void completeAddAppWidget(Intent data) {  
-        Bundle extras = data.getExtras();  
-        int appWidgetId = extras  
-                .getInt(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);  
-  
-        AppWidgetProviderInfo appWidgetInfo = mAppWidgetManager  
-                .getAppWidgetInfo(appWidgetId);  
-  
-        View hostView = mAppWidgetHost.createView(this, appWidgetId,  
-                appWidgetInfo);  
-        mainLiner.addView(hostView, appWidgetInfo.minWidth, appWidgetInfo.minHeight);
-        /*mainLiner.addInScreen(hostView, appWidgetInfo.minWidth,  
-                appWidgetInfo.minHeight); */ 
-    } 
-    
-    //获取所有已经安装的app信息
+	//获取所有已经安装的app信息
     private void loadApps() {
     	System.gc();
     	List<RResolveInfo> mApps=new ArrayList<RResolveInfo>();
@@ -374,126 +249,29 @@ public class MyLauncher extends Activity {
         	pages.clear();        	        	       	
         	for(int i=0;i<=mApps.size()/16;i++)
         	{
-        		Page page=new Page();
-        		
-        		GridView gridview=new GridView(context);
-            	gridview.setLayoutParams(new LayoutParams(LayoutParams.FILL_PARENT, LayoutParams.FILL_PARENT));
-            	gridview.setNumColumns(4);
-            	gridview.setGravity(Gravity.CENTER); 	
-            	gridview.setHorizontalFadingEdgeEnabled(false);
-            	gridview.setStretchMode(GridView.STRETCH_COLUMN_WIDTH);
-            	gridview.setVerticalSpacing(20);
-            	       						
+        		Page page=new Page();            	       						
 				if(i==apps.size()/16)
         		{
         			List<RResolveInfo> lastList=mApps.subList(i*16, mApps.size());
         			if(lastList!=null&&lastList.size()>0)
         			{
-        				page.setItems(lastList);
-        				AppsAdapter adp=new AppsAdapter(context, lastList);       				
-						gridview.setOnItemClickListener(gridviewitemclicklistener);      				
-						gridview.setOnItemLongClickListener(gridviewitemlongclicklistener);
-        				gridview.setAdapter(adp);
-        				page.setAdapter(adp);
-        				page.setView(gridview);
-        				
+        				page.setItems(lastList);     				
     					pages.add(page);
-        			}
-        			
+        			}        			
         		}else
         		{
-        			List<RResolveInfo> lastList=mApps.subList(i*16, i*16+16);
         			page.setItems(mApps.subList(i*16, i*16+16));
-        			AppsAdapter adp=new AppsAdapter(context,lastList);
-        			gridview.setOnItemClickListener(gridviewitemclicklistener);
-    				gridview.setOnItemLongClickListener(gridviewitemlongclicklistener);
-        			gridview.setAdapter(adp);
-    				page.setAdapter(adp);
-    				page.setView(gridview);
-
 					pages.add(page);
         		}
         	}
         }
-    }
-    
-    private OnItemClickListener gridviewitemclicklistener=new OnItemClickListener() {
-
-		@Override
-		public void onItemClick(AdapterView<?> parent, View v, int position,
-				long id) {
-			pagePosition=position;
-			Page p=pages.get(currentPage);
-			RResolveInfo info=p.getItems().get(position);
-			//该应用的包名  
-             String pkg = info.getResolveInfo().activityInfo.packageName;  
-             //应用的主activity类  
-             String cls = info.getResolveInfo().activityInfo.name;  
-               
-             ComponentName componet = new ComponentName(pkg, cls);  
-               
-             Intent i = new Intent();  
-             i.setComponent(componet);  
-             startActivity(i);
-			
-		}
-	};
-    private OnItemLongClickListener gridviewitemlongclicklistener=new OnItemLongClickListener() {
-
-		@Override
-		public boolean onItemLongClick(AdapterView<?> parent, View v, final int position,
-				long id) {
-			pagePosition=position;
-			Page p=pages.get(currentPage);
-			final RResolveInfo info=p.getItems().get(position);
-			info.setLongclicked(true);
-			//shakeAnimation(v,2.0f,13);//长按，抖动 
-			v.startAnimation(rotateAnimation());
-			View dv=v.findViewById(R.id.imageViewDelete);
-			dv.setVisibility(View.VISIBLE);
-			dv.setOnClickListener(new OnClickListener() {
-				
-				@Override
-				public void onClick(View v) {
-					isShake=false;
-					pagePosition=position;
-					//该应用的包名  
- 	                String pkg = info.getResolveInfo().activityInfo.packageName; 
-					//通过程序的包名创建URI 
-					Uri packageURI = Uri.parse("package:"+pkg); 
-					//创建Intent意图 
-					Intent intent = new Intent(Intent.ACTION_DELETE,packageURI); 
-					//执行卸载程序 
-					startActivity(intent);
-				}
-			});
-			return true;
-		}
-	};
-	
-	//长按抖动效果
-	private Animation rotateAnimation() {
-        Animation rotate = new RotateAnimation(-2.0f,
-                                          2.0f,
-                                          Animation.RELATIVE_TO_SELF,
-                                          0.5f,
-                                          Animation.RELATIVE_TO_SELF,
-                                          0.5f);
-
-         rotate.setRepeatMode(Animation.REVERSE);
-        rotate.setRepeatCount(Animation.INFINITE);
-        rotate.setDuration(60);
-        rotate.setInterpolator(new AccelerateDecelerateInterpolator());
-
-        return rotate;
-    }
-    
-
+    }        
+	   
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate the menu; this adds items to the action bar if it is present.
         getMenuInflater().inflate(R.menu.activity_my_launcher, menu);
-        return true;
+        return false;
     }
     
    
@@ -511,27 +289,26 @@ public class MyLauncher extends Activity {
       
             if (intent.getAction().equals("android.intent.action.PACKAGE_ADDED")) {     // install  
                 String packageName = intent.getDataString(); 
-                loadApps();
+                //loadApps();
             }  
       
             if (intent.getAction().equals("android.intent.action.PACKAGE_REMOVED")) {   // uninstall  
                 String packageName = intent.getDataString(); 
-                List<RResolveInfo> deLi=new ArrayList<RResolveInfo>();
+                /*List<RResolveInfo> deLi=new ArrayList<RResolveInfo>();
+                int index=-1;
                 for(RResolveInfo rr:pages.get(currentPage).getItems())
 				{
+                	index++;
 					if(packageName.equalsIgnoreCase("package:"+rr.getResolveInfo().activityInfo.packageName))
 					{					
 						deLi.add(rr);						
 						break;
 					}
 				}
-                pages.get(currentPage).removeItem(deLi.get(0));
-                pages.get(currentPage).notifyDataSetChanged();
-                
-				//viewPagerAdapter.notifyDataSetChanged();
-                //reLoadApp();
+                pages.get(currentPage).getItems().removeAll(deLi);
+                Log.e("launcher===", "卸载了 :" + packageName); */ 
+                //loadApps();
                 //viewPagerAdapter.notifyDataSetChanged();
-                Log.e("launcher===", "卸载了 :" + packageName);  
             }  
         }  
     }
@@ -565,7 +342,7 @@ public class MyLauncher extends Activity {
     
  
     
-    public void shakeAnimation(final View v,float scale,int time) { 
+    /*public void shakeAnimation(final View v,float scale,int time) { 
     	if (Build.VERSION.SDK_INT < Build.VERSION_CODES.HONEYCOMB) {
     	     //TODO:如果当前版本小于HONEYCOMB版本，即3.0版本
     		com.nineoldandroids.animation.ObjectAnimator bounceAnim1 = com.nineoldandroids.animation.ObjectAnimator
@@ -653,6 +430,11 @@ public class MyLauncher extends Activity {
 			});
 		}
 		   	
+    }*/
+    
+    public interface StopItemAnimator
+    {
+    	public void onStopAnimator();
     }
     
 }
