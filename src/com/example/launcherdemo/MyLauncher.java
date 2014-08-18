@@ -99,7 +99,7 @@ public class MyLauncher extends Activity {
         super.onCreate(savedInstanceState);
         context = MyLauncher.this;
         setContentView(R.layout.activity_my_launcher);
-        loadApps();            
+                    
               
         slidingDrawer=(SlidingDrawer) findViewById(R.id.slidingdrawer1);
         handle=(Button) findViewById(R.id.handle);
@@ -107,8 +107,7 @@ public class MyLauncher extends Activity {
         //mGrid = (GridView) findViewById(R.id.apps_list); 
         mainLiner=(RelativeLayout) findViewById(R.id.mainLinear);
         //mGrid.setAdapter(new AppsAdapter()); 
-        viewPagerAdapter=new ViewPagerAdapter(context);
-        viewPager.setAdapter(viewPagerAdapter);
+        
         
         //mGrid.setOnItemClickListener(listener);
        slidingDrawer.setOnDrawerCloseListener(new OnDrawerCloseListener() {
@@ -154,6 +153,7 @@ public class MyLauncher extends Activity {
 				
 			}
 		});
+        loadApps();
               
     }
     
@@ -265,6 +265,9 @@ public class MyLauncher extends Activity {
         		}
         	}
         }
+        
+        viewPagerAdapter=new ViewPagerAdapter(context);
+        viewPager.setAdapter(viewPagerAdapter);
     }        
 	   
     @Override
@@ -290,6 +293,9 @@ public class MyLauncher extends Activity {
             if (intent.getAction().equals("android.intent.action.PACKAGE_ADDED")) {     // install  
                 String packageName = intent.getDataString(); 
                 //loadApps();
+                loadApps();
+                viewPager.setCurrentItem(currentPage);
+                //ViewPager
             }  
       
             if (intent.getAction().equals("android.intent.action.PACKAGE_REMOVED")) {   // uninstall  
@@ -309,6 +315,8 @@ public class MyLauncher extends Activity {
                 Log.e("launcher===", "–∂‘ÿ¡À :" + packageName); */ 
                 //loadApps();
                 //viewPagerAdapter.notifyDataSetChanged();
+                loadApps();
+                viewPager.setCurrentItem(currentPage);
             }  
         }  
     }

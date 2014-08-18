@@ -1,5 +1,6 @@
 package com.example.launcherdemo;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -51,6 +52,7 @@ public class AppsAdapter extends BaseAdapter implements DragGridBaseAdapter
 	}
 	public void setApps(List<RResolveInfo> mApps) {		
 		this.apps = mApps;
+		//apps.addAll(mApps);
 	}
 	
 	public AppsAdapter(Context context,List<RResolveInfo> mApps) {

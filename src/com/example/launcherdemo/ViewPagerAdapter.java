@@ -5,12 +5,20 @@ import java.util.Collections;
 import java.util.List;
 import java.util.zip.Inflater;
 
+import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
+import android.content.pm.ResolveInfo;
+import android.net.Uri;
 import android.support.v4.view.PagerAdapter;
 import android.support.v4.view.ViewPager;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.View.OnClickListener;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
+import android.widget.AdapterView.OnItemClickListener;
+import android.widget.AdapterView.OnItemLongClickListener;
 import android.widget.GridView;
 
 //ViewPager Adapter
@@ -38,11 +46,52 @@ public class ViewPagerAdapter extends PagerAdapter
 
 
     @Override  
-    public Object instantiateItem(ViewGroup container, int position) { 
-    	DragGridView v=(DragGridView) LayoutInflater.from(context).inflate(R.layout.gridview_layout, null);
+    public Object instantiateItem(ViewGroup container, final int position) { 
+    	final DragGridView v=(DragGridView) LayoutInflater.from(context).inflate(R.layout.gridview_layout, null);
         v.setContainer((ViewPager) container);
         v.setAdapter(new AppsAdapter(context, MyLauncher.pages.get(position).getItems()));
         v.setContainerAdapter(this);
+        v.setOnItemClickListener(new OnItemClickListener() {
+
+			@Override
+			public void onItemClick(AdapterView<?> parent, View v, int pos,
+					long id) {
+				Intent launchIntent = new Intent(Intent.ACTION_MAIN);
+				launchIntent.addCategory(Intent.CATEGORY_LAUNCHER);
+				Page page=getPage(position);
+				ResolveInfo resolveInfo=page.getItems().get(pos).getResolveInfo();
+				ComponentName cp = new ComponentName(resolveInfo.activityInfo.packageName, resolveInfo.activityInfo.name);
+				launchIntent.setComponent(cp);
+				
+				context.startActivity(launchIntent);
+			}
+		});
+        v.setOnItemLongClickListener(new OnItemLongClickListener() {
+
+			@Override
+			public boolean onItemLongClick(AdapterView<?> parent, View vv,
+					final int pos, long id) {	
+				View deleteView=vv.findViewById(R.id.imageViewDelete);
+				deleteView.setVisibility(View.VISIBLE);
+				deleteView.setOnClickListener(new OnClickListener() {
+					
+					@Override
+					public void onClick(View vc) {
+						//deleteItem(position,pos);
+						//v.deleteItemView();
+						//通过程序的包名创建URI 
+						Page page=getPage(position);
+						ResolveInfo resolveInfo=page.getItems().get(pos).getResolveInfo();
+						Uri packageURI = Uri.parse("package:"+resolveInfo.activityInfo.packageName); 
+						//创建Intent意图 
+						Intent intent = new Intent(Intent.ACTION_DELETE,packageURI); 
+						//执行卸载程序 
+						context.startActivity(intent);
+					}
+				});
+				return false;
+			}
+		});
     	container.addView(v);            
         return v;  
     } 
